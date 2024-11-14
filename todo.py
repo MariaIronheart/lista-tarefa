@@ -7,12 +7,12 @@ class ToDo:
     def __init__(self, page: ft.Page):
         # Configurações iniciais da página.
         self.page = page
-        self.page.bgcolor = ft.colors.WHITE
+        self.page.bgcolor = ft.colors.BLUE_50
         self.page.window_width = 400
         self.page.window_height = 450
         self.page.window_resizable = False
         self.page.window_always_on_top = True
-        self.page.title = 'ToDo App'
+        self.page.title = 'Gerenciador de tarefas'
         self.task = ''
         self.view = 'all'
 
@@ -24,7 +24,7 @@ class ToDo:
         self.main_page()
 
     # Função para executar consultas no banco de dados.
-    def db_execute(self, query, params = []):
+    def db_execute(self, query, params=[]):
         with sqlite3.connect("database.db") as con:
             cur = con.cursor()
             cur.execute(query, params)
@@ -63,17 +63,71 @@ class ToDo:
         
         self.update_task_list()
 
+    # Função para excluir uma tarefa.
+    def delete(self, task_name):
+        self.db_execute('DELETE FROM tasks WHERE name = ?', params=[task_name])
+        self.results = self.db_execute('SELECT * FROM tasks')
+        self.update_task_list()
+
+    # Função para editar uma tarefa.
+    def edit(self, task_name):
+        # Cria um TextField com o nome atual da tarefa
+        edit_field = ft.TextField(value=task_name, label="Editar Tarefa", expand=True)
+
+        # Função para salvar a tarefa editada
+        def save_edit(e):
+            new_name = edit_field.value.strip()
+            if new_name and new_name != task_name:
+                # Atualiza o banco de dados
+                self.db_execute('UPDATE tasks SET name = ? WHERE name = ?', params=[new_name, task_name])
+                # Atualiza a lista de tarefas
+                self.results = self.db_execute('SELECT * FROM tasks')
+                self.update_task_list()
+                # Fecha o diálogo
+                self.page.dialog.open = False
+                self.page.update()
+
+        # Cria um botão para salvar a edição
+        save_button = ft.ElevatedButton("Salvar", on_click=save_edit)
+
+        # Cria o diálogo de edição
+        dialog = ft.AlertDialog(
+            title=ft.Text("Editar Tarefa"),
+            content=edit_field,
+            actions=[save_button],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        # Abre o diálogo
+        self.page.dialog = dialog
+        dialog.open = True
+        self.page.update()
+
     # Função para criar o contêiner de tarefas.
     def tasks_container(self):
         return ft.Container(
             height=self.page.height * 0.8,
             content=ft.Column(
                 controls=[
-                    ft.Checkbox(
-                        label=res[0], 
-                        on_change=self.checked,
-                        value=True if res[1] == 'complete' else False
-                    ) for res in self.results if res],
+                    ft.Row(
+                        controls=[
+                            ft.Checkbox(
+                                label=res[0],
+                                on_change=self.checked,
+                                value=True if res[1] == 'complete' else False
+                            ),
+                            ft.IconButton(
+                                icon=ft.icons.EDIT, 
+                                on_click=lambda e, task_name=res[0]: self.edit(task_name)
+                            ),
+                            ft.IconButton(
+                                icon=ft.icons.DELETE, 
+                                on_click=lambda e, task_name=res[0]: self.delete(task_name)
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ) for res in self.results if res
+                ],
                 scroll=ft.ScrollMode.ALWAYS
             )
         )
@@ -81,7 +135,10 @@ class ToDo:
     # Função para atualizar a lista de tarefas exibida.
     def update_task_list(self):
         tasks = self.tasks_container()
-        self.page.controls.pop()
+        # Remove o último controle (tasks container atual)
+        if self.page.controls:
+            self.page.controls.pop()
+        # Adiciona o novo tasks container
         self.page.add(tasks)
         self.page.update()
 
@@ -125,4 +182,4 @@ class ToDo:
         self.page.add(input_bar, tabs, tasks)
 
 # Inicialização da aplicação.
-ft.app(target = ToDo)
+ft.app(target=ToDo)
